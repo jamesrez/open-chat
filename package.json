@@ -1,42 +1,35 @@
 {
-  "name": "npm-module-boilerplate",
-  "version": "1.0.0",
-  "description": "Boilerplate for npm modules with ES6 features and syntax",
-  "main": "./lib/index.js",
-  "scripts": {
-    "clean": "rimraf lib",
-    "test": "npm run lint && npm run cover",
-    "test:prod": "cross-env BABEL_ENV=production npm run test",
-    "test:only": "mocha --require babel-core/register --require babel-polyfill --recursive",
-    "test:watch": "npm test -- --watch",
-    "test:examples": "node examples/",
-    "cover": "nyc --check-coverage npm run test:only",
-    "lint": "eslint src test",
-    "build": "cross-env BABEL_ENV=production babel src --out-dir lib",
-    "prepublish": "npm run clean && npm run lint && npm run test && npm run build"
-  },
+  "name": "unstoppable-chat",
+  "version": "1.1.3",
+  "description": "Decentralized End to End Encrypted Chat Network. Built with Gun.js and Sea.js.",
+  "main": "./dist/index.js",
   "files": [
-    "lib",
+    "dist",
     "src"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/flexdinesh/npm-module-boilerplate.git"
+    "url": "git+https://github.com/JamieRez/open-chat.git"
   },
   "keywords": [
-    "boilerplate",
+    "chat",
     "npm",
     "module",
     "node",
-    "javascript"
+    "javascript",
+    "decentralized",
+    "encrypted",
+    "message",
+    "text"
   ],
-  "author": "Dinesh Pandiyan <flexdinesh@gmail.com>",
+  "author": "James Rezendes <james@unstoppabledomains.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/flexdinesh/npm-module-boilerplate/issues"
+    "url": "https://github.com/JamieRez/open-chat/issues"
   },
-  "homepage": "https://github.com/flexdinesh/npm-module-boilerplate#readme",
+  "homepage": "https://github.com/JamieRez/open-chat#readme",
   "devDependencies": {
+    "@rollup/plugin-node-resolve": "^7.1.3",
     "babel-cli": "^6.26.0",
     "babel-eslint": "^10.0.1",
     "babel-plugin-add-module-exports": "^1.0.0",
@@ -51,7 +44,7 @@
     "eslint-plugin-jsx-a11y": "^6.0.2",
     "eslint-plugin-react": "^7.4.0",
     "mocha": "^6.1.3",
-    "nyc": "^13.3.0",
+    "nyc": "^15.0.1",
     "rimraf": "^2.6.2"
   },
   "dependencies": {
