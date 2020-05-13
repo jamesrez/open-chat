@@ -4,6 +4,7 @@ const Sea = require('gun/sea');
 Gun.SEA = Sea;
 export default class GunChat {
   constructor(superpeers) {
+    console.log(superpeers)
     this.gun = new Gun(superpeers);
     this.publicName = null;
   }
