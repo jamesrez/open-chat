@@ -10,6 +10,7 @@
   Gun.SEA = Sea;
   class GunChat {
     constructor(superpeers) {
+      console.log(superpeers)
       this.gun = new Gun(superpeers);
       this.publicName = null;
     }
