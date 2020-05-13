@@ -12,8 +12,8 @@ export default class GunChat {
     if(!cb) return;
     const gun = this.gun;
     gun.on('auth', () => {
-      gun.user().get('name').put(publicName);
-      this.publicName = publicName;
+      gun.user().get('name').put(publicName || username);
+      this.publicName = publicName || username;
       cb();
     });
     gun.user().recall({ sessionStorage: true });
