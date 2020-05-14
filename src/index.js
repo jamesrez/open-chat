@@ -1,7 +1,8 @@
 const Gun = require('gun');
 const Sea = require('gun/sea');
-
+require('gun/lib/not.js');
 Gun.SEA = Sea;
+
 export default class GunChat {
   constructor(superpeers) {
     this.gun = new Gun(superpeers);
@@ -91,6 +92,9 @@ export default class GunChat {
     const gun = this.gun;
     const loadedContacts = {};
     const contactsList = [];
+    gun.user().get('contacts').not((key) => {
+      cb(contactsList)
+    })
     gun.user().get('contacts').on((contacts) => {
       if (!contacts) return;
       Object.keys(contacts).forEach((pubKey) => {
@@ -126,6 +130,9 @@ export default class GunChat {
     const gun = this.gun;
     const invitesList = [];
     const loadedInvites = {};
+    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').not((key) => {
+      cb(invitesList)
+    })
     gun.get(gun.user()._.sea.pub).get('invites').get('contacts')
       .on(async (contacts) => {
         Object.keys(contacts).forEach((pubKey) => {
@@ -216,6 +223,9 @@ export default class GunChat {
     const otherPeerKeys = await otherPeer.then();
     const otherPeerEpub = otherPeerKeys.epub;
     async function loadMsgsOf(path, name) {
+      path.not((key) => {
+        cb(loadedMsgsList);
+      })
       path.on((msgs) => {
         if (!msgs) return;
         Object.keys(msgs).forEach((time) => {
@@ -297,6 +307,9 @@ export default class GunChat {
     const gun = this.gun;
     const loadedChannels = {};
     const loadedChannelsList = [];
+    gun.user().get('pchannel').not((key) => {
+      cb(loadedChannelsList);
+    });
     gun.user().get('pchannel')
       .on(async (channels) => {
         if (!channels) return;
@@ -394,6 +407,9 @@ export default class GunChat {
     const gun = this.gun;
     const loadedInvites = {};
     const loadedInvitesList = [];
+    gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').not((key) => {
+      cb(loadedInvitesList);
+    });
     gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
       .on(async (peerInvites) => {
         if (!peerInvites) return;
@@ -545,6 +561,9 @@ export default class GunChat {
     const loadedMsgs = {};
     const channelSec = await Gun.SEA.secret(channel.key, channel.pair);
     async function loadMsgsOf(path, name) {
+      path.not((key) => {
+        cb(loadedMsgsList);
+      });
       path.on((peerMsgs) => {
         if (!peerMsgs) return;
         Object.keys(peerMsgs).forEach((time) => {
