@@ -48,6 +48,7 @@
     "rimraf": "^2.6.2"
   },
   "dependencies": {
-    "gun": "0.2019.930"
+    "gun": "0.2019.930",
+    "node-webcrypto-ossl": "^2.1.0"
   }
 }
