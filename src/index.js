@@ -308,7 +308,7 @@ export default class GunChat {
               if (!channelName || loadedChannels[channelKey]) return;
               gun.user().get('pchannel').get(channelKey).get('pair')
                 .once(async (ePair) => {
-                  if (!ePair || typeof ePair === 'string' || loadedChannels[channelKey]) return;
+                  if (!ePair || loadedChannels[channelKey]) return;
                   gun.user().get('pchannel').get(channelKey).get('peers')
                     .once(async (peers) => {
                       if(!peers || loadedChannels[channelKey]) return;
