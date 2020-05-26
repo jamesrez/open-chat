@@ -1,19 +1,24 @@
 const Gun = require('gun');
 const Sea = require('gun/sea');
-
+require('gun/lib/not.js');
 Gun.SEA = Sea;
+
 export default class GunChat {
   constructor(superpeers) {
-    this.gun = new Gun({ws : {}, peers: superpeers});
+    this.gun = new Gun(superpeers);
     this.publicName = null;
+    this.contactsList = [];
+    this.contactInvitesList = [];
+    this.channelsList = [];
+    this.channelInvitesList = [];
   }
 
   async join(username, password, publicName, cb) {
     if(!cb) return;
     const gun = this.gun;
     gun.on('auth', () => {
-      gun.user().get('name').put(publicName || username);
-      this.publicName = publicName || username;
+      gun.user().get('name').put(publicName);
+      this.publicName = publicName;
       cb();
     });
     gun.user().recall({ sessionStorage: true });
@@ -52,6 +57,9 @@ export default class GunChat {
         gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
           .put({ null: null });
       });
+    gun.get('pchat').get(gun.user().is.pub).put(null, () => {
+      gun.get('pchat').get(gun.user().is.pub).put({ null: null });
+    });
   }
 
   async logout() {
@@ -84,13 +92,18 @@ export default class GunChat {
     gun.user().get('contacts').get(pubKey).put(null, () => {
       gun.user().get('contacts').get(pubKey).put({ null: null });
     });
+    const contactIndex = this.contactsList.findIndex((c) => c.pubKey === pubKey);
+    this.contactsList.splice(contactIndex, 1);
   }
 
   async loadContacts(cb) {
     if (!cb) return;
     const gun = this.gun;
+    const contactsList = this.contactsList;
     const loadedContacts = {};
-    const contactsList = [];
+    gun.user().get('contacts').not((key) => {
+      cb(contactsList)
+    })
     gun.user().get('contacts').on((contacts) => {
       if (!contacts) return;
       Object.keys(contacts).forEach((pubKey) => {
@@ -124,8 +137,11 @@ export default class GunChat {
   async loadContactInvites(cb) {
     if (!cb) return;
     const gun = this.gun;
-    const invitesList = [];
+    const invitesList = this.contactInvitesList;
     const loadedInvites = {};
+    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').not((key) => {
+      cb(invitesList)
+    })
     gun.get(gun.user()._.sea.pub).get('invites').get('contacts')
       .on(async (contacts) => {
         Object.keys(contacts).forEach((pubKey) => {
@@ -162,6 +178,8 @@ export default class GunChat {
         gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey)
           .put({ null: null });
       });
+    const inviteIndex = this.contactInvitesList.findIndex((i) => i.pubKey === pubKey);
+    this.contactInvitesList.splice(inviteIndex, 1);
   }
 
   async denyContactInvite(pubKey) {
@@ -172,6 +190,8 @@ export default class GunChat {
         gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey)
           .put({ null: null });
       });
+    const inviteIndex = this.contactInvitesList.findIndex((i) => i.pubKey === pubKey);
+    this.contactInvitesList.splice(inviteIndex, 1);
   }
 
   async sendMessageToContact(pubKey, msg) {
@@ -216,6 +236,9 @@ export default class GunChat {
     const otherPeerKeys = await otherPeer.then();
     const otherPeerEpub = otherPeerKeys.epub;
     async function loadMsgsOf(path, name) {
+      path.not((key) => {
+        cb(loadedMsgsList);
+      })
       path.on((msgs) => {
         if (!msgs) return;
         Object.keys(msgs).forEach((time) => {
@@ -290,13 +313,18 @@ export default class GunChat {
         gun.user().get('pchannel').get(channel.key)
           .put({ null: null });
       });
+    const channelIndex = this.channelsList.findIndex((c) => c.key === channel.key);
+    this.channelsList.splice(channelIndex, 1);
   }
 
   async loadChannels(cb) {
     if (!cb) return;
     const gun = this.gun;
     const loadedChannels = {};
-    const loadedChannelsList = [];
+    const loadedChannelsList = this.channelsList;
+    gun.user().get('pchannel').not((key) => {
+      cb(loadedChannelsList);
+    });
     gun.user().get('pchannel')
       .on(async (channels) => {
         if (!channels) return;
@@ -308,7 +336,7 @@ export default class GunChat {
               if (!channelName || loadedChannels[channelKey]) return;
               gun.user().get('pchannel').get(channelKey).get('pair')
                 .once(async (ePair) => {
-                  if (!ePair || loadedChannels[channelKey]) return;
+                  if (!ePair || typeof ePair === 'string' || loadedChannels[channelKey]) return;
                   gun.user().get('pchannel').get(channelKey).get('peers')
                     .once(async (peers) => {
                       if(!peers || loadedChannels[channelKey]) return;
@@ -393,7 +421,10 @@ export default class GunChat {
     if (!cb) return;
     const gun = this.gun;
     const loadedInvites = {};
-    const loadedInvitesList = [];
+    const loadedInvitesList = this.channelInvitesList;
+    gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').not((key) => {
+      cb(loadedInvitesList);
+    });
     gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
       .on(async (peerInvites) => {
         if (!peerInvites) return;
@@ -488,6 +519,8 @@ export default class GunChat {
       name: this.publicName,
       action: 'join'
     });
+    const inviteIndex = this.channelInvitesList.findIndex((c) => c.key === invite.key);
+    this.channelInvitesList.splice(inviteIndex, 1);
   }
 
   async denyChannelInvite(invite) {
@@ -497,6 +530,8 @@ export default class GunChat {
       .get(invite.peerPub)
       .get(invite.key)
       .put(null);
+    const inviteIndex = this.channelInvitesList.findIndex((c) => c.key === invite.key);
+    this.channelInvitesList.splice(inviteIndex, 1);
   }
 
   async sendMessageToChannel(channel, msg, peerInfo) {
@@ -545,6 +580,9 @@ export default class GunChat {
     const loadedMsgs = {};
     const channelSec = await Gun.SEA.secret(channel.key, channel.pair);
     async function loadMsgsOf(path, name) {
+      path.not((key) => {
+        cb(loadedMsgsList);
+      });
       path.on((peerMsgs) => {
         if (!peerMsgs) return;
         Object.keys(peerMsgs).forEach((time) => {
