@@ -48,6 +48,6 @@
     "rimraf": "^2.6.2"
   },
   "dependencies": {
-    "gun": "^0.2020.514"
+    "gun": "git+https://github.com/amark/gun.git#master"
   }
 }
