@@ -32,34 +32,12 @@ export default class GunChat {
 
   async reset() {
     const gun = this.gun;
-    gun.user().get('pchat')
-      .put(null, () => {
-        gun.user().get('pchat')
-          .put({ null: null });
-      });
-    gun.user().get('contacts')
-      .put(null, () => {
-        gun.user().get('contacts')
-          .put({ null: null });
-      });
-    gun.user().get('pchannel')
-      .put(null, () => {
-        gun.user().get('pchannel')
-          .put({ null: null });
-      });
-    gun.get(gun.user()._.sea.pub).get('invites').get('pcontact')
-      .put(null, () => {
-        gun.get(gun.user()._.sea.pub).get('invites').get('pcontact')
-          .put({ null: null });
-      });
-    gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
-      .put(null, () => {
-        gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
-          .put({ null: null });
-      });
-    gun.get('pchat').get(gun.user().is.pub).put(null, () => {
-      gun.get('pchat').get(gun.user().is.pub).put({ null: null });
-    });
+    gun.user().get('pchat').put("")
+    gun.user().get('contacts').put("");
+    gun.user().get('pchannel').put("");
+    gun.get(gun.user()._.sea.pub).get('invites').get('pcontact').put("");
+    gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').put("");
+    gun.get('pchat').get(gun.user().is.pub).put("");
   }
 
   async logout() {
@@ -89,9 +67,7 @@ export default class GunChat {
   async removeContact(pubKey) {
     if (!pubKey) return;
     const gun = this.gun;
-    gun.user().get('contacts').get(pubKey).put(null, () => {
-      gun.user().get('contacts').get(pubKey).put({ null: null });
-    });
+    gun.user().get('contacts').get(pubKey).put("");
     const contactIndex = this.contactsList.findIndex((c) => c.pubKey === pubKey);
     this.contactsList.splice(contactIndex, 1);
   }
@@ -102,8 +78,8 @@ export default class GunChat {
     const contactsList = this.contactsList;
     const loadedContacts = {};
     gun.user().get('contacts').not((key) => {
-      cb(contactsList)
-    })
+      cb(contactsList);
+    });
     gun.user().get('contacts').on((contacts) => {
       if (!contacts) return;
       Object.keys(contacts).forEach((pubKey) => {
@@ -140,8 +116,8 @@ export default class GunChat {
     const invitesList = this.contactInvitesList;
     const loadedInvites = {};
     gun.get(gun.user()._.sea.pub).get('invites').get('contacts').not((key) => {
-      cb(invitesList)
-    })
+      cb(invitesList);
+    });
     gun.get(gun.user()._.sea.pub).get('invites').get('contacts')
       .on(async (contacts) => {
         Object.keys(contacts).forEach((pubKey) => {
@@ -173,11 +149,7 @@ export default class GunChat {
         alias: username,
         name: publicName
       });
-    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey)
-      .put(null, () => {
-        gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey)
-          .put({ null: null });
-      });
+    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey).put("");
     const inviteIndex = this.contactInvitesList.findIndex((i) => i.pubKey === pubKey);
     this.contactInvitesList.splice(inviteIndex, 1);
   }
@@ -185,11 +157,7 @@ export default class GunChat {
   async denyContactInvite(pubKey) {
     if (!pubKey) return;
     const gun = this.gun;
-    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey)
-      .put(null, () => {
-        gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey)
-          .put({ null: null });
-      });
+    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey).put("");
     const inviteIndex = this.contactInvitesList.findIndex((i) => i.pubKey === pubKey);
     this.contactInvitesList.splice(inviteIndex, 1);
   }
@@ -238,7 +206,7 @@ export default class GunChat {
     async function loadMsgsOf(path, name) {
       path.not((key) => {
         cb(loadedMsgsList);
-      })
+      });
       path.on((msgs) => {
         if (!msgs) return;
         Object.keys(msgs).forEach((time) => {
@@ -265,11 +233,7 @@ export default class GunChat {
               });
               loadedMsgsList.sort((a, b) => a.time - b.time);
               cb(loadedMsgsList);
-              gun.get('pchat').get(gun.user().is.pub).get(pubKey).get('new')
-                .put(null, () => {
-                  gun.get('pchat').get(gun.user().is.pub).get(pubKey).get('new')
-                    .put({ null: null });
-                });
+              gun.get('pchat').get(gun.user().is.pub).get(pubKey).get('new').put("");
             });
         });
       });
@@ -308,11 +272,7 @@ export default class GunChat {
       name: this.publicName,
       action: 'leave'
     });
-    gun.user().get('pchannel').get(channel.key)
-      .put(null, () => {
-        gun.user().get('pchannel').get(channel.key)
-          .put({ null: null });
-      });
+    gun.user().get('pchannel').get(channel.key).put("");
     const channelIndex = this.channelsList.findIndex((c) => c.key === channel.key);
     this.channelsList.splice(channelIndex, 1);
   }
@@ -361,8 +321,8 @@ export default class GunChat {
                             loadedPeers[pubKey] = peerData;
                             loadedChannelsList[loadedChannelIndex].peers = loadedPeers;
                             cb(loadedChannelsList);
-                          })
-                      })
+                          });
+                      });
                       gun.get('pchannel').get(channelKey).get('peers').get(gun.user().is.pub)
                         .get('new')
                         .on((newMsgs) => {
@@ -501,12 +461,7 @@ export default class GunChat {
     gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
       .get(invite.peerPub)
       .get(invite.key)
-      .put(null, () => {
-        gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
-          .get(invite.peerPub)
-          .get(invite.key)
-          .put({ null: null });
-      });
+      .put("");
     const channel = invite;
     if (!channel.peers[gun.user().is.pub]) {
       channel.peers[gun.user().is.pub] = { alias: gun.user().is.alias };
@@ -529,7 +484,7 @@ export default class GunChat {
     gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
       .get(invite.peerPub)
       .get(invite.key)
-      .put(null);
+      .put("");
     const inviteIndex = this.channelInvitesList.findIndex((c) => c.key === invite.key);
     this.channelInvitesList.splice(inviteIndex, 1);
   }
@@ -616,7 +571,7 @@ export default class GunChat {
                 } else if (msgData.peerInfo.action === 'leave') {
                   gun.user().get('pchannel').get(channel.key).get('peers')
                     .get(msgData.peerInfo.pubKey)
-                    .put(null);
+                    .put("");
                 } else if (msgData.peerInfo.action === 'invited') {
                   gun.user().get('pchannel').get(channelKey).get('peers')
                     .get(msgData.peerInfo.pubKey)
@@ -640,12 +595,7 @@ export default class GunChat {
               gun.get('pchannel').get(channel.key).get('peers')
                 .get(gun.user().is.pub)
                 .get('new')
-                .put(null, () => {
-                  gun.get('pchannel').get(channel.key).get('peers')
-                    .get(gun.user().is.pub)
-                    .get('new')
-                    .put({ null: null });
-                });
+                .put("");
             });
         });
       });
@@ -658,4 +608,5 @@ export default class GunChat {
       loadMsgsOf(peerChannelChatPath, channel.peers[pubKey].name);
     });
   }
+  
 }
