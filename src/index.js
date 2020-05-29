@@ -24,9 +24,7 @@ export default class GunChat {
     gun.user().recall({ sessionStorage: true });
     if (!username || !password) return;
     gun.user().create(username, password, (ack) => {
-      if (ack && ack.err) {
-        gun.user().auth(username, password);
-      }
+      gun.user().auth(username, password);
     });
   }
 
