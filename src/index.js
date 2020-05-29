@@ -100,8 +100,8 @@ export default class GunChat {
     const contactsList = this.contactsList;
     const loadedContacts = {};
     gun.user().get('contacts').not((key) => {
-      cb(contactsList)
-    })
+      cb(contactsList);
+    });
     gun.user().get('contacts').on((contacts) => {
       if (!contacts) return;
       Object.keys(contacts).forEach((pubKey) => {
@@ -133,13 +133,13 @@ export default class GunChat {
   }
 
   async loadContactInvites(cb) {
-    if (!cb) return;
+    if (!cb || !this.gun.user().is) return;
     const gun = this.gun;
     const invitesList = this.contactInvitesList;
     const loadedInvites = {};
     gun.get(gun.user()._.sea.pub).get('invites').get('contacts').not((key) => {
-      cb(invitesList)
-    })
+      cb(invitesList);
+    });
     gun.get(gun.user()._.sea.pub).get('invites').get('contacts')
       .on(async (contacts) => {
         Object.keys(contacts).forEach((pubKey) => {
@@ -236,7 +236,7 @@ export default class GunChat {
     async function loadMsgsOf(path, name) {
       path.not((key) => {
         cb(loadedMsgsList);
-      })
+      });
       path.on((msgs) => {
         if (!msgs) return;
         Object.keys(msgs).forEach((time) => {
@@ -335,11 +335,11 @@ export default class GunChat {
               gun.user().get('pchannel').get(channelKey).get('pair')
                 .once(async (ePair) => {
                   if (!ePair || typeof ePair === 'string' || loadedChannels[channelKey]) return;
+                  const loadedPeers = {};
                   gun.user().get('pchannel').get(channelKey).get('peers')
                     .once(async (peers) => {
                       if(!peers || loadedChannels[channelKey]) return;
                       loadedChannels[channelKey] = true;
-                      const loadedPeers = {};
                       const pair = await Gun.SEA.decrypt(ePair, sec);
                       const loadedChannelIndex = loadedChannelsList.length;
                       loadedChannelsList.push({
@@ -359,8 +359,8 @@ export default class GunChat {
                             loadedPeers[pubKey] = peerData;
                             loadedChannelsList[loadedChannelIndex].peers = loadedPeers;
                             cb(loadedChannelsList);
-                          })
-                      })
+                          });
+                      });
                       gun.get('pchannel').get(channelKey).get('peers').get(gun.user().is.pub)
                         .get('new')
                         .on((newMsgs) => {
@@ -383,7 +383,7 @@ export default class GunChat {
   }
 
   async inviteToChannel(channel, username, publicName) {
-    if (!channel || !username || !publicName) return;
+    if (!channel || !username || !publicName || !this.gun.user().is) return;
     const gun = this.gun;
     const peerByAliasData = await gun.get(`~@${username}`).once();
     if (!peerByAliasData) return;
@@ -416,7 +416,7 @@ export default class GunChat {
   }
 
   async loadChannelInvites(cb) {
-    if (!cb) return;
+    if (!cb || !this.gun.user().is) return;
     const gun = this.gun;
     const loadedInvites = {};
     const loadedInvitesList = this.channelInvitesList;
@@ -622,7 +622,6 @@ export default class GunChat {
                       alias: msgData.peerInfo.alias,
                       pubKey: msgData.peerInfo.pubKey,
                       name: msgData.peerInfo.name,
-                      joined: false,
                     });
                 }
               }
@@ -648,12 +647,18 @@ export default class GunChat {
         });
       });
     }
-    Object.keys(channel.peers).forEach((pubKey) => {
-      if (pubKey === '_') return;
-      const peerChannelChatPath = gun.user(pubKey).get('pchannel')
-        .get(channelKey)
-        .get('chat');
-      loadMsgsOf(peerChannelChatPath, channel.peers[pubKey].name);
-    });
+    gun.user().get('pchannel').get(channel.key).get('peers').on((peers) => {
+      Object.keys(peers).forEach((pubKey) => {
+        if (pubKey === '_') return;
+        const peerChannelChatPath = gun.user(pubKey).get('pchannel')
+          .get(channelKey)
+          .get('chat');
+        gun.user().get('pchannel').get(channel.key).get('peers').get(pubKey).once((peer) => {
+          if(!peer || !peer.name) return;
+          channel.peers[pubKey] = peer;
+          loadMsgsOf(peerChannelChatPath, peer.name);
+        })
+      });
+    })
   }
 }
