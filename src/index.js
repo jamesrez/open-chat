@@ -372,7 +372,9 @@ export default class GunChat {
                             }
                             newCount += 1;
                           });
-                          loadedChannelsList[loadedChannelIndex].notifCount = newCount;
+                          if(loadedChannelsList[loadedChannelIndex]){
+                            loadedChannelsList[loadedChannelIndex].notifCount = newCount;
+                          }
                           cb(loadedChannelsList);
                         });
                     });
