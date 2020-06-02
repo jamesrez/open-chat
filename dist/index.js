@@ -115,7 +115,6 @@
         Object.keys(contacts).forEach((pubKey) => {
           if (pubKey === '_' || pubKey === 'null') return;
           gun.user().get('contacts').get(pubKey).on((contact) => {
-            console.log(contact);
             if (!contact || (contact && contact.name && !contact.disabled && loadedContacts[pubKey])) return;
             if(contact.disabled && loadedContacts[pubKey]){
               const index = contactsList.map(c => c.pubKey).indexOf(pubKey);
