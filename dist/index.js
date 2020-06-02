@@ -39,31 +39,42 @@
     async reset() {
       const gun = this.gun;
       gun.user().get('pchat').once((pubKeys) => {
+        if(!pubKeys) return;
         Object.keys(pubKeys).forEach((pubKey) => {
           gun.user().get('pchat').get(pubKey).put({disabled : true});
         });
       });
       gun.user().get('contacts').once((pubKeys) => {
+        if(!pubKeys) return;
         Object.keys(pubKeys).forEach((pubKey) => {
           gun.user().get('contacts').get(pubKey).put({disabled : true});
         });
       });
       gun.user().get('pchannel').once((chanKeys) => {
+        if(!chanKeys) return;
         Object.keys(chanKeys).forEach((chanKey) => {
           gun.user().get('pchannel').get(chanKey).put({disabled : true});
         });
       });
       gun.get(gun.user()._.sea.pub).get('invites').get('pcontact').once((pubKeys) => {
+        if(!pubKeys) return;
         Object.keys(pubKeys).forEach((pubKey) => {
           gun.get(gun.user()._.sea.pub).get('invites').get('pcontact').get(pubKey).put({disabled : true});
         });
       });
-      gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').once((chanKeys) => {
-        Object.keys(chanKeys).forEach((chanKey) => {
-          gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').get(chanKey).put("disabled");
+      gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').once((pubKeys) => {
+        if(!pubKeys) return;
+        Object.keys(pubKeys).forEach((pubKey) => {
+          gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').get(pubKey).once((chanKeys) => {
+            if(!chanKeys) return;
+            Object.keys(chanKeys).forEach((chanKey) => {
+              gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').get(pubKey).get(chanKey).put("disabled");
+            });
+          });
         });
       });
       gun.get('pchat').get(gun.user().is.pub).once((pubKeys) => {
+        if(!pubKeys) return;
         Object.keys(pubKeys).forEach((pubKey) => {
           gun.get('pchat').get(gun.user().is.pub).get(pubKey).put("disabled");
         });
@@ -438,9 +449,9 @@
             if (peerPub === '_') return;
             gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').get(peerPub)
               .on(async (channels) => {
-                if (!channels) return;
+                if (!channels || channels === "disabled") return;
                 Object.keys(channels).forEach(async (channelKey) => {
-                  const channel = typeof channels[channelKey] === 'string' && channels[channelKey] !== "disabled" ? JSON.parse(channels[channelKey]) : channels[channelKey];
+                  const channel = (typeof channels[channelKey] === 'string' && channels[channelKey] !== "disabled") ? JSON.parse(channels[channelKey]) : channels[channelKey];
                   if (channelKey === '_' || !channel || (channel && channel.key && loadedInvites[channelKey])) return;
                   if(channel === "disabled" && loadedInvites[channelKey]){
                     const index = loadedInvitesList.map(c => c.key).indexOf(channelKey);
