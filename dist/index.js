@@ -21,6 +21,21 @@
       this.announceInvitesList = [];
     }
 
+    async getPubFromUsername(username){
+      if(!username) return;
+      const gun = this.gun;
+      const peerByUsername = await gun.get(`~@${username}`).once();
+      let max = 0;
+      let pub = null;
+      Object.keys(peerByUsername._['>']).forEach((d) => {
+        if(peerByUsername._['>'][d] > max){
+          max = peerByUsername._['>'][d];
+          pub = d.substr(1);
+        }
+      });
+      return pub;
+    }
+
     async join(username, password, publicName, cb) {
       if(!cb) return;
       const gun = this.gun;
@@ -89,9 +104,8 @@
     async addContact(username, publicName) {
       if (!username) return;
       const gun = this.gun;
-      const peerByUsername = await gun.get(`~@${username}`).once();
-      if (!peerByUsername) return;
-      const pubKey = Object.keys(peerByUsername)[1].substr(1);
+      const pubKey = await this.getPubFromUsername(username);
+      if(!pubKey) return;
       gun.user().get('contacts').get(pubKey).put({
         pubKey,
         alias: username,
@@ -193,9 +207,8 @@
     async acceptContactInvite(username, publicName) {
       if (!username && !publicName) return;
       const gun = this.gun;
-      const peerByUsername = await gun.get(`~@${username}`).once();
-      if (!peerByUsername) return;
-      const pubKey = Object.keys(peerByUsername)[1].substr(1);
+      const pubKey = await this.getPubFromUsername(username);
+      if(!pubKey) return;
       gun.user().get('contacts').get(pubKey)
         .put({
           pubKey,
@@ -403,9 +416,8 @@
     async inviteToChannel(channel, username, publicName) {
       if (!channel || !username || !publicName || !this.gun.user().is) return;
       const gun = this.gun;
-      const peerByAliasData = await gun.get(`~@${username}`).once();
-      if (!peerByAliasData) return;
-      const peerPubKey = Object.keys(peerByAliasData)[1].substr(1);
+      const peerPubKey = await this.getPubFromUsername(username);
+      if(!peerPubKey) return;
       const otherPeerKeys = await gun.user(peerPubKey).then();
       const otherPeerEpub = otherPeerKeys.epub;
       const inviteSec = await Gun.SEA.secret(otherPeerEpub, gun.user()._.sea);
