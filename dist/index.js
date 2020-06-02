@@ -115,7 +115,8 @@
         Object.keys(contacts).forEach((pubKey) => {
           if (pubKey === '_' || pubKey === 'null') return;
           gun.user().get('contacts').get(pubKey).on((contact) => {
-            if (!contact || contact && contact.name && !contact.disabled && loadedContacts[pubKey]) return;
+            console.log(contact);
+            if (!contact || (contact && contact.name && !contact.disabled && loadedContacts[pubKey])) return;
             if(contact.disabled && loadedContacts[pubKey]){
               const index = contactsList.map(c => c.pubKey).indexOf(pubKey);
               contactsList.splice(index, 1);
@@ -159,13 +160,13 @@
           Object.keys(contacts).forEach((pubKey) => {
             if (pubKey === '_' || pubKey === 'null') return;
             gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey)
-              .once((contact) => {
-                if (!contact || contact && contact.name && loadedInvites[contact.pubKey]) return;
+              .on((contact) => {
+                if (!contact || (contact && contact.name && !contact.disabled && loadedInvites[contact.pubKey])) return;
                 if(contact.disabled && loadedInvites[pubKey]){
                   const index = invitesList.map(c => c.pubKey).indexOf(pubKey);
                   invitesList.splice(index, 1);
                   loadedInvites[pubKey] = false;
-                } else if (contact.name && !loadedInvites[pubKey]){
+                } else if (contact.name && !contact.disabled && !loadedInvites[pubKey]){
                   loadedInvites[contact.pubKey] = true;
                   invitesList.push({
                     name: contact.name,
