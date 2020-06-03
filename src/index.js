@@ -4,13 +4,33 @@ require('gun/lib/not.js');
 Gun.SEA = Sea;
 
 export default class GunChat {
+  
   constructor(superpeers) {
     this.gun = new Gun(superpeers);
+    this.gun._.opt.radisk = false;
+    this.gun._.opt.localStorage = false;
     this.publicName = null;
     this.contactsList = [];
     this.contactInvitesList = [];
     this.channelsList = [];
     this.channelInvitesList = [];
+    this.announcesList = [];
+    this.announceInvitesList = [];
+  }
+
+  async getPubFromUsername(username){
+    if(!username) return;
+    const gun = this.gun;
+    const peerByUsername = await gun.get(`~@${username}`).once();
+    let max = 0;
+    let pub = null;
+    Object.keys(peerByUsername._['>']).forEach((d) => {
+      if(peerByUsername._['>'][d] > max){
+        max = peerByUsername._['>'][d];
+        pub = d.substr(1);
+      }
+    })
+    return pub;
   }
 
   async join(username, password, publicName, cb) {
@@ -23,19 +43,58 @@ export default class GunChat {
     });
     gun.user().recall({ sessionStorage: true });
     if (!username || !password) return;
-    gun.user().create(username, password, (ack) => {
-      gun.user().auth(username, password);
+    gun.user().auth(username, password, (ack) => {
+      if(ack && ack.err){
+        gun.user().create(username, password, () => {
+          gun.user().auth(username, password)
+        });
+      }
     });
   }
 
   async reset() {
     const gun = this.gun;
-    gun.user().get('pchat').put("")
-    gun.user().get('contacts').put("");
-    gun.user().get('pchannel').put("");
-    gun.get(gun.user()._.sea.pub).get('invites').get('pcontact').put("");
-    gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').put("");
-    gun.get('pchat').get(gun.user().is.pub).put("");
+    gun.user().get('pchat').once((pubKeys) => {
+      if(!pubKeys) return;
+      Object.keys(pubKeys).forEach((pubKey) => {
+        gun.user().get('pchat').get(pubKey).put({disabled : true});
+      });
+    });
+    gun.user().get('contacts').once((pubKeys) => {
+      if(!pubKeys) return;
+      Object.keys(pubKeys).forEach((pubKey) => {
+        gun.user().get('contacts').get(pubKey).put({disabled : true});
+      });
+    });
+    gun.user().get('pchannel').once((chanKeys) => {
+      if(!chanKeys) return;
+      Object.keys(chanKeys).forEach((chanKey) => {
+        gun.user().get('pchannel').get(chanKey).put({disabled : true});
+      });
+    });
+    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').once((pubKeys) => {
+      if(!pubKeys) return;
+      Object.keys(pubKeys).forEach((pubKey) => {
+        gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey).put({disabled : true});
+      });
+    });
+    gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').once((pubKeys) => {
+      if(!pubKeys) return;
+      Object.keys(pubKeys).forEach((pubKey) => {
+        gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').get(pubKey).once((chanKeys) => {
+          if(!chanKeys) return;
+          Object.keys(chanKeys).forEach((chanKey) => {
+            gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').get(pubKey).get(chanKey).put("disabled");
+          });
+        });
+      });
+    });
+    gun.get('pchat').get(gun.user().is.pub).once((pubKeys) => {
+      if(!pubKeys) return;
+      Object.keys(pubKeys).forEach((pubKey) => {
+        gun.get('pchat').get(gun.user().is.pub).get(pubKey).put("disabled");
+      });
+    });
   }
 
   async logout() {
@@ -46,28 +105,27 @@ export default class GunChat {
   async addContact(username, publicName) {
     if (!username) return;
     const gun = this.gun;
-    const peerByUsername = await gun.get(`~@${username}`).once();
-    if (!peerByUsername) return;
-    const pubKey = Object.keys(peerByUsername)[1].substr(1);
+    const pubKey = await this.getPubFromUsername(username);
+    if(!pubKey) return;
     gun.user().get('contacts').get(pubKey).put({
       pubKey,
       alias: username,
-      name: publicName
+      name: publicName,
+      disabled: false
     });
     gun.get(pubKey).get('invites').get('contacts').get(gun.user().is.pub)
       .put({
         pubKey: gun.user().is.pub,
         alias: gun.user().is.alias,
-        name: this.publicName
+        name: this.publicName,
+        disabled : false
       });
   }
 
   async removeContact(pubKey) {
     if (!pubKey) return;
     const gun = this.gun;
-    gun.user().get('contacts').get(pubKey).put("");
-    const contactIndex = this.contactsList.findIndex((c) => c.pubKey === pubKey);
-    this.contactsList.splice(contactIndex, 1);
+    gun.user().get('contacts').get(pubKey).put({disabled : true});
   }
 
   async loadContacts(cb) {
@@ -81,35 +139,41 @@ export default class GunChat {
     gun.user().get('contacts').on((contacts) => {
       if (!contacts) return;
       Object.keys(contacts).forEach((pubKey) => {
-        if (pubKey === '_' || pubKey === 'null' || loadedContacts[pubKey]) return;
+        if (pubKey === '_' || pubKey === 'null') return;
         gun.user().get('contacts').get(pubKey).on((contact) => {
-          if (!contact || !contact.name || loadedContacts[pubKey]) return;
-          loadedContacts[pubKey] = true;
-          const contactIndex = contactsList.length;
-          contactsList.push({
-            pubKey: contact.pubKey,
-            alias: contact.alias,
-            name: contact.name
-          });
-          cb(contactsList);
-          gun.get('pchat').get(gun.user().is.pub).get(contact.pubKey).get('new')
+          if (!contact || (contact && contact.name && !contact.disabled && loadedContacts[pubKey])) return;
+          if(contact.disabled && loadedContacts[pubKey]){
+            const index = contactsList.map(c => c.pubKey).indexOf(pubKey);
+            contactsList.splice(index, 1);
+            loadedContacts[pubKey] = false;
+          } else if(!contact.disabled && contact.name && !loadedContacts[pubKey]){
+            loadedContacts[pubKey] = true;
+            const contactIndex = contactsList.length;
+            contactsList.push({
+              pubKey: contact.pubKey,
+              alias: contact.alias,
+              name: contact.name
+            });
+            gun.get('pchat').get(gun.user().is.pub).get(contact.pubKey).get('new')
             .on((newMsgs) => {
               if (!newMsgs) return;
               let newCount = 0;
               Object.keys(newMsgs).forEach((time) => {
-                if (time === '_' || !newMsgs[time]) return;
+                if (time === '_' || time === "disabled" || !newMsgs[time] || newMsgs[time] === "disabled") return;
                 newCount += 1;
               });
               contactsList[contactIndex].notifCount = newCount;
               cb(contactsList);
             });
+          }
+          cb(contactsList);
         });
       });
     });
   }
 
   async loadContactInvites(cb) {
-    if (!cb) return;
+    if (!cb || !this.gun.user().is) return;
     const gun = this.gun;
     const invitesList = this.contactInvitesList;
     const loadedInvites = {};
@@ -119,17 +183,23 @@ export default class GunChat {
     gun.get(gun.user()._.sea.pub).get('invites').get('contacts')
       .on(async (contacts) => {
         Object.keys(contacts).forEach((pubKey) => {
-          if (pubKey === '_' || pubKey === 'null' || loadedInvites[pubKey]) return;
+          if (pubKey === '_' || pubKey === 'null') return;
           gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey)
-            .once((contact) => {
-              if (!contact || !contact.name || loadedInvites[contact.pubKey]) return;
+            .on((contact) => {
+              if (!contact || (contact && contact.name && !contact.disabled && loadedInvites[contact.pubKey])) return;
+              if(contact.disabled && loadedInvites[pubKey]){
+                const index = invitesList.map(c => c.pubKey).indexOf(pubKey);
+                invitesList.splice(index, 1);
+                loadedInvites[pubKey] = false;
+              } else if (contact.name && !contact.disabled && !loadedInvites[pubKey]){
                 loadedInvites[contact.pubKey] = true;
                 invitesList.push({
                   name: contact.name,
                   pubKey: contact.pubKey,
                   alias: contact.alias
                 });
-                cb(invitesList);
+              }
+              cb(invitesList);
             });
         });
       });
@@ -138,26 +208,22 @@ export default class GunChat {
   async acceptContactInvite(username, publicName) {
     if (!username && !publicName) return;
     const gun = this.gun;
-    const peerByUsername = await gun.get(`~@${username}`).once();
-    if (!peerByUsername) return;
-    const pubKey = Object.keys(peerByUsername)[1].substr(1);
+    const pubKey = await this.getPubFromUsername(username);
+    if(!pubKey) return;
     gun.user().get('contacts').get(pubKey)
       .put({
         pubKey,
         alias: username,
-        name: publicName
+        name: publicName,
+        disabled: false
       });
-    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey).put("");
-    const inviteIndex = this.contactInvitesList.findIndex((i) => i.pubKey === pubKey);
-    this.contactInvitesList.splice(inviteIndex, 1);
+    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey).put({disabled : true});
   }
 
   async denyContactInvite(pubKey) {
     if (!pubKey) return;
     const gun = this.gun;
-    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey).put("");
-    const inviteIndex = this.contactInvitesList.findIndex((i) => i.pubKey === pubKey);
-    this.contactInvitesList.splice(inviteIndex, 1);
+    gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey).put({disabled : true});
   }
 
   async sendMessageToContact(pubKey, msg) {
@@ -211,7 +277,7 @@ export default class GunChat {
           if (loadedMsgs[time]) return;
           path.get(time)
             .on(async (msgDataString) => {
-              if (!msgDataString || loadedMsgs[time]) return;
+              if (!msgDataString || msgDataString === "null" || loadedMsgs[time]) return;
               loadedMsgs[time] = true;
               let msgData = msgDataString;
               if (typeof msgDataString === 'string') {
@@ -231,7 +297,7 @@ export default class GunChat {
               });
               loadedMsgsList.sort((a, b) => a.time - b.time);
               cb(loadedMsgsList);
-              gun.get('pchat').get(gun.user().is.pub).get(pubKey).get('new').put("");
+              gun.get('pchat').get(gun.user().is.pub).get(pubKey).get('new').get(msgData.time).put("disabled");
             });
         });
       });
@@ -247,16 +313,18 @@ export default class GunChat {
     const channelKey = channelPair.epub;
     const sec = await Gun.SEA.secret(channelKey, gun.user()._.sea);
     const encPair = await Gun.SEA.encrypt(JSON.stringify(channelPair), sec);
-    gun.user().get('pchannel').get(channelKey).get('pair')
-      .put(encPair);
-    gun.user().get('pchannel').get(channelKey).get('name')
-      .put(channelName);
+    gun.user().get('pchannel').get(channelKey).put({
+      pair: encPair,
+      name: channelName,
+      key: channelKey
+    });
     gun.user().get('pchannel').get(channelKey).get('peers')
       .get(gun.user().is.pub)
       .put(JSON.stringify({
         alias: gun.user().is.alias,
         name: this.publicName,
-        joined: true
+        joined: true,
+        disabled : false
       }));
   }
 
@@ -270,9 +338,8 @@ export default class GunChat {
       name: this.publicName,
       action: 'leave'
     });
-    gun.user().get('pchannel').get(channel.key).put("");
-    const channelIndex = this.channelsList.findIndex((c) => c.key === channel.key);
-    this.channelsList.splice(channelIndex, 1);
+    gun.user().get('pchannel').get(channel.key)
+      .put({disabled : true});
   }
 
   async loadChannels(cb) {
@@ -289,65 +356,69 @@ export default class GunChat {
         Object.keys(channels).forEach(async (channelKey) => {
           if (loadedChannels[channelKey]) return;
           const sec = await Gun.SEA.secret(channelKey, gun.user()._.sea);
-          gun.user().get('pchannel').get(channelKey).get('name')
-            .once((channelName) => {
-              if (!channelName || loadedChannels[channelKey]) return;
-              gun.user().get('pchannel').get(channelKey).get('pair')
-                .once(async (ePair) => {
-                  if (!ePair || typeof ePair === 'string' || loadedChannels[channelKey]) return;
-                  gun.user().get('pchannel').get(channelKey).get('peers')
-                    .once(async (peers) => {
-                      if(!peers || loadedChannels[channelKey]) return;
-                      loadedChannels[channelKey] = true;
-                      const loadedPeers = {};
-                      const pair = await Gun.SEA.decrypt(ePair, sec);
-                      const loadedChannelIndex = loadedChannelsList.length;
-                      loadedChannelsList.push({
-                        key: channelKey,
-                        name: channelName,
-                        userCount: 0,
-                        latestMsg: null,
-                        peers : loadedPeers,
-                        pair,
+          gun.user().get('pchannel').get(channelKey).on((channel) => {
+            if (!channel || !channel.key || (channel && channel.key && !channel.disabled && loadedChannels[channelKey])) return;
+            if(channel.disabled && loadedChannels[channelKey]){
+              const index = loadedChannelsList.map(c => c.key).indexOf(channelKey);
+              loadedChannelsList.splice(index, 1);
+              loadedChannels[channelKey] = false;
+              cb(loadedChannelsList);
+            }
+            else if(!channel.disabled && channel.name && !loadedChannels[channelKey]){
+              const loadedPeers = {};
+              gun.user().get('pchannel').get(channelKey).get('peers')
+                .once(async (peers) => {
+                  if(!peers || loadedChannels[channelKey]) return;
+                  loadedChannels[channelKey] = true;
+                  const pair = await Gun.SEA.decrypt(channel.pair, sec);
+                  const loadedChannelIndex = loadedChannelsList.length;
+                  loadedChannelsList.push({
+                    key: channelKey,
+                    name: channel.name,
+                    userCount: 0,
+                    latestMsg: null,
+                    peers : loadedPeers,
+                    pair,
+                  });
+                  cb(loadedChannelsList);
+                  Object.keys(peers).forEach((pubKey) => {
+                    if(pubKey === '_' || loadedPeers[pubKey]) return;
+                    gun.user().get('pchannel').get(channelKey).get('peers')
+                      .get(pubKey).once((peerData) => {
+                        if(!peerData || peerData.disabled || loadedPeers[pubKey]) return;
+                        loadedPeers[pubKey] = peerData;
+                        loadedChannelsList[loadedChannelIndex].peers = loadedPeers;
+                        cb(loadedChannelsList);
                       });
+                  });
+                  gun.get('pchannel').get(channelKey).get('peers').get(gun.user().is.pub)
+                    .get('new')
+                    .on((newMsgs) => {
+                      if (!newMsgs) return;
+                      let newCount = 0;
+                      Object.keys(newMsgs).forEach((time) => {
+                        if (time === '_' || time === "disabled" || !newMsgs[time] || newMsgs[time] === "disabled") {
+                          return;
+                        }
+                        newCount += 1;
+                      });
+                      if(loadedChannelsList[loadedChannelIndex]){
+                        loadedChannelsList[loadedChannelIndex].notifCount = newCount;
+                      }
                       cb(loadedChannelsList);
-                      Object.keys(peers).forEach((pubKey) => {
-                        if(pubKey === '_' || loadedPeers[pubKey]) return;
-                        gun.user().get('pchannel').get(channelKey).get('peers')
-                          .get(pubKey).once((peerData) => {
-                            if(!peerData || loadedPeers[pubKey]) return;
-                            loadedPeers[pubKey] = peerData;
-                            loadedChannelsList[loadedChannelIndex].peers = loadedPeers;
-                            cb(loadedChannelsList);
-                          });
-                      });
-                      gun.get('pchannel').get(channelKey).get('peers').get(gun.user().is.pub)
-                        .get('new')
-                        .on((newMsgs) => {
-                          if (!newMsgs) return;
-                          let newCount = 0;
-                          Object.keys(newMsgs).forEach((time) => {
-                            if (time === '_' || !newMsgs[time]) {
-                              return;
-                            }
-                            newCount += 1;
-                          });
-                          loadedChannelsList[loadedChannelIndex].notifCount = newCount;
-                          cb(loadedChannelsList);
-                        });
                     });
                 });
-            });
+            }
+          });
         });
       });
   }
 
   async inviteToChannel(channel, username, publicName) {
-    if (!channel || !username || !publicName) return;
+    if (!channel || !username || !publicName || !this.gun.user().is) return;
     const gun = this.gun;
-    const peerByAliasData = await gun.get(`~@${username}`).once();
-    if (!peerByAliasData) return;
-    const peerPubKey = Object.keys(peerByAliasData)[1].substr(1);
+    const peerPubKey = await this.getPubFromUsername(username);
+    if(!peerPubKey) return;
     const otherPeerKeys = await gun.user(peerPubKey).then();
     const otherPeerEpub = otherPeerKeys.epub;
     const inviteSec = await Gun.SEA.secret(otherPeerEpub, gun.user()._.sea);
@@ -372,11 +443,12 @@ export default class GunChat {
         alias: username,
         name: publicName,
         joined: false,
+        disabled: false
       }));
   }
 
   async loadChannelInvites(cb) {
-    if (!cb) return;
+    if (!cb || !this.gun.user().is) return;
     const gun = this.gun;
     const loadedInvites = {};
     const loadedInvitesList = this.channelInvitesList;
@@ -390,22 +462,29 @@ export default class GunChat {
           if (peerPub === '_') return;
           gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').get(peerPub)
             .on(async (channels) => {
-              if (!channels) return;
+              if (!channels || channels === "disabled") return;
               Object.keys(channels).forEach(async (channelKey) => {
-                const channel = typeof channels[channelKey] === 'string' ? JSON.parse(channels[channelKey]) : channels[channelKey];
-                if (channelKey === '_' || !channel || !channel.name || loadedInvites[channelKey]) return;
-                loadedInvites[channelKey] = channelKey;
-                const peerKeys = await gun.user(peerPub).then();
-                const peerEpub = peerKeys ? peerKeys.epub : null;
-                const sec = await Gun.SEA.secret(peerEpub, gun.user()._.sea);
-                if (typeof channel.pair === 'string') {
-                  channel.pair = JSON.parse(channel.pair.substr(3, channel.pair.length));
+                const channel = (typeof channels[channelKey] === 'string' && channels[channelKey] !== "disabled") ? JSON.parse(channels[channelKey]) : channels[channelKey];
+                if (channelKey === '_' || !channel || (channel && channel.key && loadedInvites[channelKey])) return;
+                if(channel === "disabled" && loadedInvites[channelKey]){
+                  const index = loadedInvitesList.map(c => c.key).indexOf(channelKey);
+                  loadedInvitesList.splice(index, 1);
+                  loadedInvites[channelKey] = false;
                 }
-                channel.pair = await Gun.SEA.decrypt(channel.pair, sec);
-                channel.peerPub = peerPub;
-                channel.peerAlias = peerKeys.alias;
-                channel.key = channelKey;
-                loadedInvitesList.push(channel);
+                else if(channel.key && !loadedInvites[channelKey]){
+                  loadedInvites[channelKey] = channelKey;
+                  const peerKeys = await gun.user(peerPub).then();
+                  const peerEpub = peerKeys ? peerKeys.epub : null;
+                  const sec = await Gun.SEA.secret(peerEpub, gun.user()._.sea);
+                  if (typeof channel.pair === 'string') {
+                    channel.pair = JSON.parse(channel.pair.substr(3, channel.pair.length));
+                  }
+                  channel.pair = await Gun.SEA.decrypt(channel.pair, sec);
+                  channel.peerPub = peerPub;
+                  channel.peerAlias = peerKeys.alias;
+                  channel.key = channelKey;
+                  loadedInvitesList.push(channel);
+                }
                 cb(loadedInvitesList);
               });
             });
@@ -416,8 +495,6 @@ export default class GunChat {
   async acceptChannelInvite(invite) {
     if (!invite) return;
     const gun = this.gun;
-    gun.user().get('pchannel').get(invite.key).get('name')
-      .put(invite.name);
     gun.user().get('pchannel').get(invite.key).get('peers')
       .get(gun.user().is.pub)
       .put(JSON.stringify({
@@ -439,8 +516,12 @@ export default class GunChat {
       }));
     const sec = await Gun.SEA.secret(invite.key, gun.user()._.sea);
     const encPair = await Gun.SEA.encrypt(invite.pair, sec);
-    gun.user().get('pchannel').get(invite.key).get('pair')
-      .put(encPair);
+    gun.user().get('pchannel').get(invite.key).put({
+      pair: encPair,
+      name: invite.name,
+      key: invite.key,
+      disabled: false
+    });
     const loadedPeers = {};
     Object.keys(invite.peers).forEach((pubKey) => {
       if (pubKey === '_') return;
@@ -448,7 +529,7 @@ export default class GunChat {
         .get('peers')
         .get(pubKey)
         .once((peer) => {
-          if (loadedPeers[pubKey] || !peer) return;
+          if (loadedPeers[pubKey] || !peer || peer.disabled) return;
           loadedPeers[pubKey] = pubKey;
           gun.user().get('pchannel').get(invite.key)
             .get('peers')
@@ -459,7 +540,7 @@ export default class GunChat {
     gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
       .get(invite.peerPub)
       .get(invite.key)
-      .put("");
+      .put("disabled");
     const channel = invite;
     if (!channel.peers[gun.user().is.pub]) {
       channel.peers[gun.user().is.pub] = { alias: gun.user().is.alias };
@@ -482,9 +563,7 @@ export default class GunChat {
     gun.get(gun.user()._.sea.pub).get('invites').get('pchannel')
       .get(invite.peerPub)
       .get(invite.key)
-      .put("");
-    const inviteIndex = this.channelInvitesList.findIndex((c) => c.key === invite.key);
-    this.channelInvitesList.splice(inviteIndex, 1);
+      .put("disabled");
   }
 
   async sendMessageToChannel(channel, msg, peerInfo) {
@@ -516,11 +595,11 @@ export default class GunChat {
         gun.get('pchannel').get(channel.key).get('peers').get(pubKey)
           .get('new')
           .get(time)
-          .put({
+          .put(JSON.stringify({
             msg: encMsg,
             user: gun.user().is.pub,
             time
-          });
+          }));
       }
     });
   }
@@ -565,11 +644,12 @@ export default class GunChat {
                       pubKey: msgData.peerInfo.pubKey,
                       name: msgData.peerInfo.name,
                       joined: true,
+                      disabled: false
                     });
                 } else if (msgData.peerInfo.action === 'leave') {
                   gun.user().get('pchannel').get(channel.key).get('peers')
                     .get(msgData.peerInfo.pubKey)
-                    .put("");
+                    .put({disabled : true});
                 } else if (msgData.peerInfo.action === 'invited') {
                   gun.user().get('pchannel').get(channelKey).get('peers')
                     .get(msgData.peerInfo.pubKey)
@@ -577,7 +657,7 @@ export default class GunChat {
                       alias: msgData.peerInfo.alias,
                       pubKey: msgData.peerInfo.pubKey,
                       name: msgData.peerInfo.name,
-                      joined: false,
+                      disabled: false
                     });
                 }
               }
@@ -593,18 +673,34 @@ export default class GunChat {
               gun.get('pchannel').get(channel.key).get('peers')
                 .get(gun.user().is.pub)
                 .get('new')
-                .put("");
+                .get(msgData.time)
+                .put("disabled");
             });
         });
       });
     }
-    Object.keys(channel.peers).forEach((pubKey) => {
-      if (pubKey === '_') return;
-      const peerChannelChatPath = gun.user(pubKey).get('pchannel')
-        .get(channelKey)
-        .get('chat');
-      loadMsgsOf(peerChannelChatPath, channel.peers[pubKey].name);
+    const loadedPeers = {};
+    gun.user().get('pchannel').get(channel.key).get('peers').on((peers) => {
+      Object.keys(peers).forEach((pubKey) => {
+        if (pubKey === '_') return;
+        const peerChannelChatPath = gun.user(pubKey).get('pchannel')
+          .get(channelKey)
+          .get('chat');
+        gun.user().get('pchannel').get(channel.key).get('peers').get(pubKey).on((peer) => {
+          if(!peer || !peer.name || (peer && peer.name && !peer.disabled && loadedPeers[pubKey])) return;
+          if(peer.disabled && loadedPeers[pubKey]){
+            delete channel.peers[pubKey];
+            loadedPeers[pubKey] = false;
+          }
+          else if(!peer.disabled && peer.name && !loadedPeers[pubKey]){
+            loadedPeers[pubKey] = true;
+            channel.peers[pubKey] = peer;
+            loadMsgsOf(peerChannelChatPath, peer.name);
+          }
+        });
+      });
     });
   }
   
 }
+
