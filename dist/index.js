@@ -13,8 +13,6 @@
     
     constructor(superpeers) {
       this.gun = new Gun(superpeers);
-      this.gun._.opt.radisk = false;
-      this.gun._.opt.localStorage = false;
       this.publicName = null;
       this.contactsList = [];
       this.contactInvitesList = [];
