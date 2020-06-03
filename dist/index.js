@@ -46,8 +46,12 @@
       });
       gun.user().recall({ sessionStorage: true });
       if (!username || !password) return;
-      gun.user().create(username, password, (ack) => {
-        gun.user().auth(username, password);
+      gun.user().auth(username, password, (ack) => {
+        if(ack && ack.err){
+          gun.user().create(username, password, () => {
+            gun.user().auth(username, password);
+          });
+        }
       });
     }
 
@@ -71,10 +75,10 @@
           gun.user().get('pchannel').get(chanKey).put({disabled : true});
         });
       });
-      gun.get(gun.user()._.sea.pub).get('invites').get('pcontact').once((pubKeys) => {
+      gun.get(gun.user()._.sea.pub).get('invites').get('contacts').once((pubKeys) => {
         if(!pubKeys) return;
         Object.keys(pubKeys).forEach((pubKey) => {
-          gun.get(gun.user()._.sea.pub).get('invites').get('pcontact').get(pubKey).put({disabled : true});
+          gun.get(gun.user()._.sea.pub).get('invites').get('contacts').get(pubKey).put({disabled : true});
         });
       });
       gun.get(gun.user()._.sea.pub).get('invites').get('pchannel').once((pubKeys) => {
