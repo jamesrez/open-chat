@@ -20,6 +20,8 @@
       this.channelInvitesList = [];
       this.announcesList = [];
       this.announceInvitesList = [];
+      this.activeContact = null;
+      this.activeChannel = null;
     }
 
     async getPubFromUsername(username){
@@ -235,10 +237,8 @@
       const gun = this.gun;
       if (msg.length < 1) return;
       const time = Date.now();
-      const otherPeer = gun.user(pubKey);
-      const otherPeerKeys = await otherPeer.then();
-      const otherPeerEpub = otherPeerKeys.epub;
-      const sec = await Gun.SEA.secret(otherPeerEpub, gun.user()._.sea);
+      const otherPeer = await gun.user(pubKey);
+      const sec = await Gun.SEA.secret(otherPeer.epub, gun.user()._.sea);
       const encMsg = await Gun.SEA.encrypt(msg, sec);
       gun.user().get('pchat').get(pubKey).get(time)
         .put(JSON.stringify({
@@ -249,7 +249,7 @@
         .get(time)
         .put(JSON.stringify({
           msg: encMsg,
-          time
+          time,
         }));
       gun.get('pchat').get(pubKey).get(gun.user().is.pub).get('latest')
         .put(JSON.stringify({
@@ -266,11 +266,13 @@
     async loadMessagesOfContact(pubKey, publicName, cb) {
       if (!pubKey || !cb) return;
       const gun = this.gun;
+      this.activeContact = pubKey;
+      this.activeChannel = null;
+      const thisChat = this;
       const loadedMsgs = {};
       const loadedMsgsList = [];
-      const otherPeer = gun.user(pubKey);
-      const otherPeerKeys = await otherPeer.then();
-      const otherPeerEpub = otherPeerKeys.epub;
+      const otherPeer = await gun.user(pubKey).then();
+      const otherPeerEpub = otherPeer.epub;
       async function loadMsgsOf(path, name) {
         path.not((key) => {
           cb(loadedMsgsList);
@@ -281,7 +283,7 @@
             if (loadedMsgs[time]) return;
             path.get(time)
               .on(async (msgDataString) => {
-                if (!msgDataString || msgDataString === "null" || loadedMsgs[time]) return;
+                if (thisChat.activeContact !== pubKey || !msgDataString || msgDataString === "null" || loadedMsgs[time]) return;
                 loadedMsgs[time] = true;
                 let msgData = msgDataString;
                 if (typeof msgDataString === 'string') {
@@ -300,8 +302,8 @@
                   owner: name
                 });
                 loadedMsgsList.sort((a, b) => a.time - b.time);
-                cb(loadedMsgsList);
                 gun.get('pchat').get(gun.user().is.pub).get(pubKey).get('new').get(msgData.time).put("disabled");
+                cb(loadedMsgsList);
               });
           });
         });
@@ -423,8 +425,8 @@
       const gun = this.gun;
       const peerPubKey = await this.getPubFromUsername(username);
       if(!peerPubKey) return;
-      const otherPeerKeys = await gun.user(peerPubKey).then();
-      const otherPeerEpub = otherPeerKeys.epub;
+      const otherPeer = await gun.user(peerPubKey);
+      const otherPeerEpub = otherPeer.epub;
       const inviteSec = await Gun.SEA.secret(otherPeerEpub, gun.user()._.sea);
       const eInvitePair = await Gun.SEA.encrypt(
         JSON.stringify(channel.pair),
@@ -611,6 +613,9 @@
     async loadMessagesOfChannel(channel, cb) {
       if (!channel || !cb) return;
       const gun = this.gun;
+      this.activeChannel = channel.key;
+      this.activeContact = null;
+      const thisChat = this;
       const channelKey = channel.key;
       const loadedMsgsList = [];
       const loadedMsgs = {};
@@ -625,7 +630,7 @@
             if (loadedMsgs[time + name] || time === '_') return;
             path.get(time)
               .on(async (msgDataString) => {
-                if (loadedMsgs[time + name]) return;
+                if (thisChat.activeChannel !== channel.key || loadedMsgs[time + name]) return;
                 loadedMsgs[time + name] = true;
                 let msgData = msgDataString;
                 if (typeof msgDataString === 'string') {
