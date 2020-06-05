@@ -18,19 +18,18 @@ export default class GunChat {
     this.activeChannel = null;
   }
 
-  async getPubFromUsername(username, cb){
+  async validatePubKeyFromUsername(username, pubKey, cb){
     if(!username || !cb) return;
     const gun = this.gun;
+    let verified = false;
     gun.get(`~@${username}`).once((peerByUsername) => {
-      let max = 0;
-      let pub = null;
-      Object.keys(peerByUsername._['>']).forEach((d) => {
-        if(peerByUsername._['>'][d] > max){
-          max = peerByUsername._['>'][d];
-          pub = d.substr(1);
+      Object.keys(peerByUsername._['>']).forEach((uPub) => {
+        if(uPub.substr(1) === pubKey){
+          verified = true;
+          cb();
         }
       });
-      cb(pub);
+      if(!verified) cb("Cannot validate pubkey from username");
     });
   }
 
@@ -39,6 +38,7 @@ export default class GunChat {
     const gun = this.gun;
     gun.on('auth', () => {
       gun.user().get('name').put(publicName);
+      gun.user().get('epub').put(gun.user()._.sea.epub);
       this.publicName = publicName;
       cb();
     });
@@ -103,11 +103,11 @@ export default class GunChat {
     gun.user().leave();
   }
 
-  async addContact(username, publicName) {
+  async addContact(username, pubKey, publicName) {
     if (!username) return;
     const gun = this.gun;
-    this.getPubFromUsername(username, (pubKey) => {
-      if(!pubKey) return;
+    this.validatePubKeyFromUsername(username, pubKey, (err) => {
+      if(err) return;
       gun.user().get('contacts').get(pubKey).put({
         pubKey,
         alias: username,
@@ -207,11 +207,11 @@ export default class GunChat {
       });
   }
 
-  async acceptContactInvite(username, publicName) {
+  async acceptContactInvite(username, pubKey, publicName) {
     if (!username && !publicName) return;
     const gun = this.gun;
-    this.getPubFromUsername(username, (pubKey) => {
-      if(!pubKey) return;
+    this.validatePubKeyFromUsername(username, pubKey, (err) => {
+      if(err) return;
       gun.user().get('contacts').get(pubKey)
         .put({
           pubKey,
@@ -237,7 +237,7 @@ export default class GunChat {
     const otherPeer = await gun.user(pubKey);
     let otherPeerEpub = otherPeer.epub;
     if(otherPeer.epub[2] === ":"){
-      otherPeerEpub = JSON.parse(otherPeer.epub)[":"]
+      otherPeerEpub = JSON.parse(otherPeer.epub)[":"];
     }
     const sec = await Gun.SEA.secret(otherPeerEpub, gun.user()._.sea);
     const encMsg = await Gun.SEA.encrypt(msg, sec);
@@ -275,7 +275,7 @@ export default class GunChat {
     const otherPeer = await gun.user(pubKey);
     let otherPeerEpub = otherPeer.epub;
     if(otherPeer.epub[2] === ":"){
-      otherPeerEpub = JSON.parse(otherPeer.epub)[":"]
+      otherPeerEpub = JSON.parse(otherPeer.epub)[":"];
     }
     async function loadMsgsOf(path, name) {
       path.not((key) => {
@@ -425,15 +425,15 @@ export default class GunChat {
       });
   }
 
-  async inviteToChannel(channel, username, publicName) {
+  async inviteToChannel(channel, username, peerPubKey, publicName) {
     if (!channel || !username || !publicName || !this.gun.user().is) return;
     const gun = this.gun;
-    this.getPubFromUsername(username, async (peerPubKey) => {
-      if(!peerPubKey) return;
+    this.validatePubKeyFromUsername(username, peerPubKey, async (err) => {
+      if(err) return;
       const otherPeer = await gun.user(peerPubKey);
       let otherPeerEpub = otherPeer.epub;
       if(otherPeer.epub[2] === ":"){
-        otherPeerEpub = JSON.parse(otherPeer.epub)[":"]
+        otherPeerEpub = JSON.parse(otherPeer.epub)[":"];
       }
       const inviteSec = await Gun.SEA.secret(otherPeerEpub, gun.user()._.sea);
       const eInvitePair = await Gun.SEA.encrypt(

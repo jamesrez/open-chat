@@ -24,19 +24,18 @@
       this.activeChannel = null;
     }
 
-    async getPubFromUsername(username, cb){
+    async validatePubKeyFromUsername(username, pubKey, cb){
       if(!username || !cb) return;
       const gun = this.gun;
+      let verified = false;
       gun.get(`~@${username}`).once((peerByUsername) => {
-        let max = 0;
-        let pub = null;
-        Object.keys(peerByUsername._['>']).forEach((d) => {
-          if(peerByUsername._['>'][d] > max){
-            max = peerByUsername._['>'][d];
-            pub = d.substr(1);
+        Object.keys(peerByUsername._['>']).forEach((uPub) => {
+          if(uPub.substr(1) === pubKey){
+            verified = true;
+            cb();
           }
         });
-        cb(pub);
+        if(!verified) cb("Cannot validate pubkey from username");
       });
     }
 
@@ -45,6 +44,7 @@
       const gun = this.gun;
       gun.on('auth', () => {
         gun.user().get('name').put(publicName);
+        gun.user().get('epub').put(gun.user()._.sea.epub);
         this.publicName = publicName;
         cb();
       });
@@ -109,11 +109,11 @@
       gun.user().leave();
     }
 
-    async addContact(username, publicName) {
+    async addContact(username, pubKey, publicName) {
       if (!username) return;
       const gun = this.gun;
-      this.getPubFromUsername(username, (pubKey) => {
-        if(!pubKey) return;
+      this.validatePubKeyFromUsername(username, pubKey, (err) => {
+        if(err) return;
         gun.user().get('contacts').get(pubKey).put({
           pubKey,
           alias: username,
@@ -213,11 +213,11 @@
         });
     }
 
-    async acceptContactInvite(username, publicName) {
+    async acceptContactInvite(username, pubKey, publicName) {
       if (!username && !publicName) return;
       const gun = this.gun;
-      this.getPubFromUsername(username, (pubKey) => {
-        if(!pubKey) return;
+      this.validatePubKeyFromUsername(username, pubKey, (err) => {
+        if(err) return;
         gun.user().get('contacts').get(pubKey)
           .put({
             pubKey,
@@ -431,11 +431,11 @@
         });
     }
 
-    async inviteToChannel(channel, username, publicName) {
+    async inviteToChannel(channel, username, peerPubKey, publicName) {
       if (!channel || !username || !publicName || !this.gun.user().is) return;
       const gun = this.gun;
-      this.getPubFromUsername(username, async (peerPubKey) => {
-        if(!peerPubKey) return;
+      this.validatePubKeyFromUsername(username, peerPubKey, async (err) => {
+        if(err) return;
         const otherPeer = await gun.user(peerPubKey);
         let otherPeerEpub = otherPeer.epub;
         if(otherPeer.epub[2] === ":"){
