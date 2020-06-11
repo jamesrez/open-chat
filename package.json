@@ -1,6 +1,6 @@
 {
   "name": "unstoppable-chat",
-  "version": "1.6.4",
+  "version": "1.6.7",
   "description": "Decentralized End to End Encrypted Chat Network. Built with Gun.js and Sea.js.",
   "main": "./dist/index.js",
   "files": [
@@ -48,6 +48,7 @@
     "rimraf": "^2.6.2"
   },
   "dependencies": {
-    "gun": "git+https://github.com/amark/gun.git#master"
+    "@peculiar/webcrypto": "^1.1.1",
+    "gun": "git://github.com/amark/gun.git#master"
   }
 }
