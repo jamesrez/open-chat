@@ -990,8 +990,10 @@
     }
 
     async sendMessageToAnnouncement(announcement, msg, peerInfo) {
-      if (!announcement || announcement.owner !== this.gun.user().is.pub || msg.length < 1) return;
+      if (!announcement || msg.length < 1) return;
       const gun = this.gun;
+      const isOwner = (announcement.owner === gun.user().is.pub);
+      if(!isOwner && !peerInfo) return;
       const time = Date.now();
       const sec = await Gun.SEA.secret(announcement.key, announcement.pair);
       const encMsg = await Gun.SEA.encrypt(msg, sec);
@@ -1005,26 +1007,28 @@
           time,
           peerInfo,
         }));
-      gun.get('announcement').get(announcement.key).get('latest')
+      if(isOwner){
+        gun.get('announcement').get(announcement.key).get('latest')
         .put({
           msg: encMsg,
           user: gun.user().is.pub,
           time,
           peerInfo,
         });
-      if (!announcement.peers) return;
-      Object.keys(announcement.peers).forEach((pubKey) => {
-        if (pubKey !== '_' && announcement.peers[pubKey] && pubKey !== gun.user().is.pub) {
-          gun.get('announcement').get(announcement.key).get('peers').get(pubKey)
-            .get('new')
-            .get(time)
-            .put(JSON.stringify({
-              msg: encMsg,
-              user: gun.user().is.pub,
-              time
-            }));
-        }
-      });
+        if (!announcement.peers) return;
+        Object.keys(announcement.peers).forEach((pubKey) => {
+          if (pubKey !== '_' && announcement.peers[pubKey] && pubKey !== gun.user().is.pub) {
+            gun.get('announcement').get(announcement.key).get('peers').get(pubKey)
+              .get('new')
+              .get(time)
+              .put(JSON.stringify({
+                msg: encMsg,
+                user: gun.user().is.pub,
+                time
+              }));
+          }
+        });
+      }
     }
 
     async loadMessagesOfAnnouncement(announcement, cb) {
@@ -1092,20 +1096,24 @@
                       .put(JSON.stringify(peerObj));
                   }
                 }
-                loadedMsgsList.push({
-                  time: msgData.time,
-                  userPub: msgData.userPub,
-                  owner: name,
-                  msg: decMsg,
-                  peerInfo: msgData.peerInfo
-                });
-                loadedMsgsList.sort((a, b) => a.time - b.time);
-                cb(loadedMsgsList);
+                if(msgData.userPub === announcement.owner || (!msgData.peerInfo || gun.user().is.pub === announcement.owner)
+                  || (msgData.peerInfo && msgData.userPub === gun.user().is.pub)
+                ){
+                  loadedMsgsList.push({
+                    time: msgData.time,
+                    userPub: msgData.userPub,
+                    owner: name,
+                    msg: decMsg,
+                    peerInfo: msgData.peerInfo
+                  });
+                  loadedMsgsList.sort((a, b) => a.time - b.time);
+                  cb(loadedMsgsList);
+                }
                 gun.get('announcement').get(announcement.key).get('peers')
-                  .get(gun.user().is.pub)
-                  .get('new')
-                  .get(msgData.time)
-                  .put("disabled");
+                    .get(gun.user().is.pub)
+                    .get('new')
+                    .get(msgData.time)
+                    .put("disabled");
               });
           });
         });
@@ -1132,9 +1140,7 @@
           else if(!peer.disabled && peer.name && !loadedPeers[pubKey]){
             loadedPeers[pubKey] = true;
             announcement.peers[pubKey] = peer;
-            if(announcement.owner === pubKey){
-              loadMsgsOf(peerAnnouncementChatPath, peer.name);
-            }
+            loadMsgsOf(peerAnnouncementChatPath, peer.name);
           }
         });
       });
