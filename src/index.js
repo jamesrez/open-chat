@@ -682,12 +682,12 @@ export default class GunChat {
                 peerInfo: msgData.peerInfo
               });
               loadedMsgsList.sort((a, b) => a.time - b.time);
-              cb(loadedMsgsList);
               gun.get('pchannel').get(channel.key).get('peers')
                 .get(gun.user().is.pub)
                 .get('new')
                 .get(msgData.time)
                 .put("disabled");
+              cb(loadedMsgsList);
             });
         });
       });
@@ -730,8 +730,9 @@ export default class GunChat {
       pair: encPair,
       name: announcementName,
       key: announcementKey,
-      owner: gun.user()._.sea.pub
+      owner: gun.user()._.sea.pub,
     });
+    gun.user().get('announcement').get(announcementKey).get('admins').get(gun.user().is.pub).put(true);
     gun.user().get('announcement').get(announcementKey).get('peers')
       .get(gun.user().is.pub)
       .put(JSON.stringify({
@@ -780,48 +781,65 @@ export default class GunChat {
               }
               else if(!announcement.disabled && announcement.name && !loadedAnnouncements[announcementKey]){
                 const loadedPeers = {};
+                const loadedAdmins = {};
                 gun.user().get('announcement').get(announcementKey).get('peers')
                   .once(async (peers) => {
                     if(!peers || loadedAnnouncements[announcementKey]) return;
-                    loadedAnnouncements[announcementKey] = true;
-                    const pair = await Gun.SEA.decrypt(announcement.pair, sec);
-                    const loadedAnnouncementIndex = loadedAnnouncementsList.length;
-                    loadedAnnouncementsList.push({
-                      key: announcementKey,
-                      name: announcement.name,
-                      owner: announcement.owner,
-                      userCount: 0,
-                      latestMsg: null,
-                      peers : loadedPeers,
-                      pair,
-                    });
-                    cb(loadedAnnouncementsList);
-                    Object.keys(peers).forEach((pubKey) => {
-                      if(pubKey === '_' || loadedPeers[pubKey]) return;
-                      gun.user().get('announcement').get(announcementKey).get('peers')
-                        .get(pubKey).once((peerData) => {
-                          if(!peerData || peerData.disabled || loadedPeers[pubKey]) return;
-                          loadedPeers[pubKey] = peerData;
-                          loadedAnnouncementsList[loadedAnnouncementIndex].peers = loadedPeers;
+                    gun.user().get('announcement').get(announcementKey).get('admins').once(async (admins) => {
+                      console.log(admins);
+                      if(!admins || loadedAnnouncements[announcementKey]) return;
+                      loadedAnnouncements[announcementKey] = true;
+                      const pair = await Gun.SEA.decrypt(announcement.pair, sec);
+                      const loadedAnnouncementIndex = loadedAnnouncementsList.length;
+                      loadedAnnouncementsList.push({
+                        key: announcementKey,
+                        name: announcement.name,
+                        owner: announcement.owner,
+                        userCount: 0,
+                        latestMsg: null,
+                        peers : loadedPeers,
+                        admins: loadedAdmins,
+                        pair,
+                      });
+                      cb(loadedAnnouncementsList);
+                      Object.keys(peers).forEach((pubKey) => {
+                        if(pubKey === '_' || loadedPeers[pubKey]) return;
+                        gun.user().get('announcement').get(announcementKey).get('peers')
+                          .get(pubKey).once((peerData) => {
+                            if(!peerData || peerData.disabled || loadedPeers[pubKey]) return;
+                            loadedPeers[pubKey] = peerData;
+                            loadedAnnouncementsList[loadedAnnouncementIndex].peers = loadedPeers;
+                            cb(loadedAnnouncementsList);
+                          });
+                      });
+                      Object.keys(admins).forEach((pubKey) => {
+                        if(pubKey === '_' || loadedAdmins[pubKey]) return;
+                        gun.user().get('announcement').get(announcementKey).get('admins')
+                          .get(pubKey).once((isAdmin) => {
+                            console.log(pubKey + ": " + isAdmin)
+                            if(!isAdmin || loadedAdmins[pubKey]) return;
+                            loadedAdmins[pubKey] = isAdmin;
+                            loadedAnnouncementsList[loadedAnnouncementIndex].admins = loadedAdmins;
+                            cb(loadedAnnouncementsList);
+                          });
+                      });
+                      gun.get('announcement').get(announcementKey).get('peers').get(gun.user().is.pub)
+                        .get('new')
+                        .on((newMsgs) => {
+                          if (!newMsgs) return;
+                          let newCount = 0;
+                          Object.keys(newMsgs).forEach((time) => {
+                            if (time === '_' || time === "disabled" || !newMsgs[time] || newMsgs[time] === "disabled") {
+                              return;
+                            }
+                            newCount += 1;
+                          });
+                          if(loadedAnnouncementsList[loadedAnnouncementIndex]){
+                            loadedAnnouncementsList[loadedAnnouncementIndex].notifCount = newCount;
+                          }
                           cb(loadedAnnouncementsList);
                         });
-                    });
-                    gun.get('announcement').get(announcementKey).get('peers').get(gun.user().is.pub)
-                      .get('new')
-                      .on((newMsgs) => {
-                        if (!newMsgs) return;
-                        let newCount = 0;
-                        Object.keys(newMsgs).forEach((time) => {
-                          if (time === '_' || time === "disabled" || !newMsgs[time] || newMsgs[time] === "disabled") {
-                            return;
-                          }
-                          newCount += 1;
-                        });
-                        if(loadedAnnouncementsList[loadedAnnouncementIndex]){
-                          loadedAnnouncementsList[loadedAnnouncementIndex].notifCount = newCount;
-                        }
-                        cb(loadedAnnouncementsList);
-                      });
+                    })
                   });
               }
             });
@@ -941,7 +959,8 @@ export default class GunChat {
       name: invite.name,
       key: invite.key,
       disabled: false,
-      owner: invite.owner
+      owner: invite.owner,
+      admins: invite.admins
     });
     const loadedPeers = {};
     Object.keys(invite.peers).forEach((pubKey) => {
@@ -986,8 +1005,8 @@ export default class GunChat {
   async sendMessageToAnnouncement(announcement, msg, peerInfo) {
     if (!announcement || msg.length < 1) return;
     const gun = this.gun;
-    const isOwner = (announcement.owner === gun.user().is.pub);
-    if(!isOwner && !peerInfo) return;
+    const isAdmin = (announcement.admins[gun.user().is.pub]);
+    if(!isAdmin && !peerInfo) return;
     const time = Date.now();
     const sec = await Gun.SEA.secret(announcement.key, announcement.pair);
     const encMsg = await Gun.SEA.encrypt(msg, sec);
@@ -1001,7 +1020,7 @@ export default class GunChat {
         time,
         peerInfo,
       }));
-    if(isOwner){
+    if(isAdmin){
       gun.get('announcement').get(announcement.key).get('latest')
       .put({
         msg: encMsg,
