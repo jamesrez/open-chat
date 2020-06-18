@@ -738,14 +738,15 @@
         key: announcementKey,
         owner: gun.user()._.sea.pub,
       });
-      gun.user().get('announcement').get(announcementKey).get('admins').get(gun.user().is.pub).put(true);
+      gun.user().get('announcement').get(announcementKey).get('admins').get(gun.user().is.pub).put(this.publicName);
       gun.user().get('announcement').get(announcementKey).get('peers')
         .get(gun.user().is.pub)
         .put(JSON.stringify({
           alias: gun.user().is.alias,
           name: this.publicName,
           joined: true,
-          disabled : false
+          disabled : false,
+          pubKey : gun.user().is.pub
         }));
     }
 
@@ -788,26 +789,29 @@
                 else if(!announcement.disabled && announcement.name && !loadedAnnouncements[announcementKey]){
                   const loadedPeers = {};
                   const loadedAdmins = {};
+                  let loadedAnnouncementIndex;
                   gun.user().get('announcement').get(announcementKey).get('peers')
                     .once(async (peers) => {
                       if(!peers || loadedAnnouncements[announcementKey]) return;
-                      gun.user().get('announcement').get(announcementKey).get('admins').once(async (admins) => {
-                        console.log(admins);
-                        if(!admins || loadedAnnouncements[announcementKey]) return;
-                        loadedAnnouncements[announcementKey] = true;
-                        const pair = await Gun.SEA.decrypt(announcement.pair, sec);
-                        const loadedAnnouncementIndex = loadedAnnouncementsList.length;
-                        loadedAnnouncementsList.push({
-                          key: announcementKey,
-                          name: announcement.name,
-                          owner: announcement.owner,
-                          userCount: 0,
-                          latestMsg: null,
-                          peers : loadedPeers,
-                          admins: loadedAdmins,
-                          pair,
-                        });
-                        cb(loadedAnnouncementsList);
+                      gun.user().get('announcement').get(announcementKey).get('admins').on(async (admins) => {
+                        if(!admins) return;
+                        if(!loadedAnnouncements[announcementKey]){
+                          loadedAnnouncements[announcementKey] = true;
+                          const pair = await Gun.SEA.decrypt(announcement.pair, sec);
+                          loadedAnnouncementIndex = loadedAnnouncementsList.length;
+                          loadedAnnouncementsList.push({
+                            key: announcementKey,
+                            name: announcement.name,
+                            owner: announcement.owner,
+                            userCount: 0,
+                            latestMsg: null,
+                            peers : loadedPeers,
+                            admins: loadedAdmins,
+                            pair,
+                          });
+                          cb(loadedAnnouncementsList);
+                        }
+                        if(typeof loadedAnnouncementIndex === 'undefined') return
                         Object.keys(peers).forEach((pubKey) => {
                           if(pubKey === '_' || loadedPeers[pubKey]) return;
                           gun.user().get('announcement').get(announcementKey).get('peers')
@@ -821,10 +825,9 @@
                         Object.keys(admins).forEach((pubKey) => {
                           if(pubKey === '_' || loadedAdmins[pubKey]) return;
                           gun.user().get('announcement').get(announcementKey).get('admins')
-                            .get(pubKey).once((isAdmin) => {
-                              console.log(pubKey + ": " + isAdmin);
-                              if(!isAdmin || loadedAdmins[pubKey]) return;
-                              loadedAdmins[pubKey] = isAdmin;
+                            .get(pubKey).once((name) => {
+                              if(name === "disabled" || loadedAdmins[pubKey]) return;
+                              loadedAdmins[pubKey] = name;
                               loadedAnnouncementsList[loadedAnnouncementIndex].admins = loadedAdmins;
                               cb(loadedAnnouncementsList);
                             });
@@ -886,7 +889,8 @@
             alias: username,
             name: publicName,
             joined: false,
-            disabled: false
+            disabled: false,
+            pubKey: peerPubKey
           }));
       });
     }
@@ -966,7 +970,6 @@
         key: invite.key,
         disabled: false,
         owner: invite.owner,
-        admins: invite.admins
       });
       const loadedPeers = {};
       Object.keys(invite.peers).forEach((pubKey) => {
@@ -978,6 +981,17 @@
           .get('peers')
           .get(pubKey)
           .put(JSON.stringify(peer));
+      });
+      const loadedAdmins = {};
+      Object.keys(invite.admins).forEach((pubKey) => {
+        if (pubKey === '_') return;
+        const admin = invite.admins[pubKey];
+        if (loadedAdmins[pubKey] || !admin || admin === 'disabled') return;
+        loadedAdmins[pubKey] = admin;
+        gun.user().get('announcement').get(invite.key)
+          .get('admins')
+          .get(pubKey)
+          .put(admin);
       });
       gun.get(gun.user()._.sea.pub).get('invites').get('announcement')
         .get(invite.peerPub)
@@ -1011,7 +1025,7 @@
     async sendMessageToAnnouncement(announcement, msg, peerInfo) {
       if (!announcement || msg.length < 1) return;
       const gun = this.gun;
-      const isAdmin = (announcement.admins[gun.user().is.pub]);
+      const isAdmin = (announcement.admins[gun.user().is.pub] && announcement.admins[gun.user().is.pub] !== "disabled");
       if(!isAdmin && !peerInfo) return;
       const time = Date.now();
       const sec = await Gun.SEA.secret(announcement.key, announcement.pair);
@@ -1113,11 +1127,12 @@
                     gun.user().get('announcement').get(announcementKey).get('peers')
                       .get(msgData.peerInfo.pubKey)
                       .put(JSON.stringify(peerObj));
+                  } else if (msgData.peerInfo.action === 'newAdmin' && msgData.userPub === announcement.owner) {
+                    gun.user().get('announcement').get(announcementKey).get('admins')
+                      .get(msgData.peerInfo.pubKey).put(msgData.peerInfo.name);
                   }
                 }
-                if(msgData.userPub === announcement.owner || (!msgData.peerInfo || gun.user().is.pub === announcement.owner)
-                  || (msgData.peerInfo && msgData.userPub === gun.user().is.pub)
-                ){
+                if(msgData.peerInfo || (announcement.admins[msgData.userPub] && announcement.admins[msgData.userPub] !== "disabled")){
                   loadedMsgsList.push({
                     time: msgData.time,
                     userPub: msgData.userPub,
@@ -1162,6 +1177,20 @@
             loadMsgsOf(peerAnnouncementChatPath, peer.name);
           }
         });
+      });
+    }
+
+    async addAdminToAnnouncement(announcement, newAdmin){
+      const gun = this.gun;
+      gun.user().get('announcement').get(announcement.key).get('owner').once((ownerPub) => {
+        if(gun.user().is.pub === ownerPub){
+          let newAdminMsg = `${newAdmin.name} has been made an admin.`; 
+          this.sendMessageToAnnouncement(announcement, newAdminMsg, {
+            pubKey: newAdmin.pubKey,
+            name: newAdmin.name,
+            action: 'newAdmin'
+          });
+        }
       });
     }
   }
