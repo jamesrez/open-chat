@@ -317,25 +317,35 @@
       loadMsgsOf(gun.user(pubKey).get('pchat').get(gun.user()._.sea.pub), publicName);
     }
 
-    async createChannel(channelName) {
+    async createChannel(channelName, cb) {
       const gun = this.gun;
       const channelPair = await Gun.SEA.pair();
       const channelKey = channelPair.epub;
       const sec = await Gun.SEA.secret(channelKey, gun.user()._.sea);
       const encPair = await Gun.SEA.encrypt(JSON.stringify(channelPair), sec);
-      gun.user().get('pchannel').get(channelKey).put({
+      const channel = {
         pair: encPair,
         name: channelName,
-        key: channelKey
-      });
-      gun.user().get('pchannel').get(channelKey).get('peers')
-        .get(gun.user().is.pub)
-        .put(JSON.stringify({
+        key: channelKey,
+        peers: {}
+      };
+      gun.user().get('pchannel').get(channelKey).put(channel, () => {
+        const userPeer = JSON.stringify({
           alias: gun.user().is.alias,
           name: this.publicName,
           joined: true,
           disabled : false
-        }));
+        });
+        gun.user().get('pchannel').get(channelKey).get('peers')
+        .get(gun.user().is.pub)
+        .put(userPeer, () => {
+          channel.peers[gun.user().is.pub] = userPeer;
+          if(cb && typeof cb === 'function'){
+            channel.pair = channelPair;
+            cb(channel);
+          }
+        });
+      });
     }
 
     async leaveChannel(channel) {
@@ -726,28 +736,40 @@
       });
     }
 
-    async createAnnouncement(announcementName) {
+    async createAnnouncement(announcementName, cb) {
       const gun = this.gun;
+      const publicName = this.publicName;
       const announcementPair = await Gun.SEA.pair();
       const announcementKey = announcementPair.epub;
       const sec = await Gun.SEA.secret(announcementKey, gun.user()._.sea);
       const encPair = await Gun.SEA.encrypt(JSON.stringify(announcementPair), sec);
-      gun.user().get('announcement').get(announcementKey).put({
+      const announcement = {
         pair: encPair,
         name: announcementName,
         key: announcementKey,
         owner: gun.user()._.sea.pub,
-      });
-      gun.user().get('announcement').get(announcementKey).get('admins').get(gun.user().is.pub).put(this.publicName);
-      gun.user().get('announcement').get(announcementKey).get('peers')
-        .get(gun.user().is.pub)
-        .put(JSON.stringify({
+        peers: {},
+        admins: {}
+      };
+      gun.user().get('announcement').get(announcementKey).put(announcement, () => {
+        gun.user().get('announcement').get(announcementKey).get('admins').get(gun.user().is.pub).put(this.publicName);
+        const userPeer = JSON.stringify({
           alias: gun.user().is.alias,
           name: this.publicName,
           joined: true,
           disabled : false,
           pubKey : gun.user().is.pub
-        }));
+        });
+        gun.user().get('announcement').get(announcementKey).get('peers')
+        .get(gun.user().is.pub)
+        .put(userPeer);
+        if(cb && typeof cb === 'function'){
+          announcement.admins[gun.user().is.pub] = publicName;
+          announcement.peers[gun.user().is.pub] = userPeer;
+          announcement.pair = announcementPair;
+          cb(announcement);
+        }
+      });
     }
 
     async leaveAnnouncement(announcement) {
