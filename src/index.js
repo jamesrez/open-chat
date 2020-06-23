@@ -842,7 +842,7 @@ export default class GunChat {
                           }
                           cb(loadedAnnouncementsList);
                         });
-                    })
+                    });
                   });
               }
             });
@@ -1124,6 +1124,7 @@ export default class GunChat {
                 } else if (msgData.peerInfo.action === 'newAdmin' && msgData.userPub === announcement.owner) {
                   gun.user().get('announcement').get(announcementKey).get('admins')
                     .get(msgData.peerInfo.pubKey).put(msgData.peerInfo.name);
+                  announcement.admins[msgData.peerInfo.pubKey] = msgData.peerInfo.name;
                 }
               }
               if(msgData.peerInfo || (announcement.admins[msgData.userPub] && announcement.admins[msgData.userPub] !== "disabled")){
@@ -1178,14 +1179,14 @@ export default class GunChat {
     const gun = this.gun;
     gun.user().get('announcement').get(announcement.key).get('owner').once((ownerPub) => {
       if(gun.user().is.pub === ownerPub){
-        let newAdminMsg = `${newAdmin.name} has been made an admin.` 
+        let newAdminMsg = `${newAdmin.name} has been made an admin.`; 
         this.sendMessageToAnnouncement(announcement, newAdminMsg, {
           pubKey: newAdmin.pubKey,
           name: newAdmin.name,
           action: 'newAdmin'
         });
       }
-    })
+    });
   }
 }
 

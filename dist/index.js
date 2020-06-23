@@ -1130,6 +1130,7 @@
                   } else if (msgData.peerInfo.action === 'newAdmin' && msgData.userPub === announcement.owner) {
                     gun.user().get('announcement').get(announcementKey).get('admins')
                       .get(msgData.peerInfo.pubKey).put(msgData.peerInfo.name);
+                    announcement.admins[msgData.peerInfo.pubKey] = msgData.peerInfo.name;
                   }
                 }
                 if(msgData.peerInfo || (announcement.admins[msgData.userPub] && announcement.admins[msgData.userPub] !== "disabled")){

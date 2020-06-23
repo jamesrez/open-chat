@@ -1,6 +1,6 @@
 {
   "name": "unstoppable-chat",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Decentralized End to End Encrypted Chat Network. Built with Gun.js and Sea.js.",
   "main": "./dist/index.js",
   "files": [
